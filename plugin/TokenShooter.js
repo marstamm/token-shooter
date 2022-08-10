@@ -1,44 +1,76 @@
 const TIMESCALE = 0.1;
 const GRAVITY = 9.81;
-
+const MAX_SHOOTING_STRENGTH = 150
 export default function TokenShooter(eventBus, overlays, elementRegistry) {
   this._eventBus = eventBus;
   this._overlays = overlays;
   this._elementRegistry = elementRegistry;
-
-  const self = this;
-
-  eventBus.on('import.done', function () {
-    const startEvent = elementRegistry.get("StartEvent_1");
-    overlays.add(startEvent.id, {
-      position: {
-        bottom: 0,
-        right: 0
-      },
-      html: self.createToken(startEvent)
-    });
-  })
 }
 
 TokenShooter.$inject = ['eventBus', 'overlays', 'elementRegistry'];
 
+TokenShooter.prototype.addToken = function (elementOrId) {
+  const self = this;
+
+  const overlays = this._overlays;
+  const elementRegistry = this._elementRegistry;
+  const eventBus = this._eventBus;
+
+
+  const element = elementRegistry.get(elementOrId.id || elementOrId);
+
+  const token = self.createToken(element)
+
+  const overlayId = overlays.add(element.id, {
+    position: {
+      top: element.height / 2,
+      left: element.width / 2
+    },
+    html: token.html
+  });
+
+  token.onHit = function (hitElement) {
+    overlays.remove(overlayId);
+    self.addToken(hitElement);
+
+    eventBus.fire('tokenShooter.tokenHit', {
+      from: element,
+      to: hitElement,
+      token: token
+    })
+  }
+}
+
+
 TokenShooter.prototype.createToken = function (_element) {
   const self = this;
 
-  const token = document.createElement('div');
-  token.innerHTML = 'O';
-  token.className = 'token';
-  token.style.position = 'absolute';
+  const token = {
+    bpmnElement: _element
+  };
 
-  const startPos = {};
+  const html = token.html = document.createElement('div');
+  html.innerHTML = '';
+  html.className = 'tokenShooter token';
+  html.style.position = 'absolute';
+
+  let startPos = {};
 
   var djsOverlayContainer = document.querySelector('.djs-overlay-container');
   const moveFct = function (evt) {
     var transform = djsOverlayContainer.style.transform
 
     var scale = parseFloat(transform.substr(7));
-    token.style.left = (evt.clientX - startPos.x) / scale + 'px'
-    token.style.top = (evt.clientY - startPos.y) / scale + 'px'
+
+    const newPosition = {
+      x: (evt.clientX - startPos.x) / scale,
+      y: (evt.clientY - startPos.y) / scale
+    };
+
+    cropVector(newPosition, MAX_SHOOTING_STRENGTH);
+
+    html.style.left = newPosition.x + 'px'
+    html.style.top = newPosition.y + 'px'
 
     console.log('mouseMove', (evt.clientX - startPos.x) / scale + 'px', (evt.clientY - startPos.y) / scale + 'px')
 
@@ -46,32 +78,41 @@ TokenShooter.prototype.createToken = function (_element) {
     evt.stopImmediatePropagation();
   };
 
-  token.addEventListener('mousedown', function (evt) {
+  const upFct = function (evt) {
+    console.log('mouseup');
+    evt.stopPropagation();
+
+    const offset = {
+      x: parseFloat(html.style.left),
+      y: parseFloat(html.style.top)
+    }
+
+    var transform = djsOverlayContainer.style.transform
+
+    var scale = parseFloat(transform.substr(7));
+
+    startPos = vectorMult(startPos, 1 / scale)
+
+    startTrajectory(offset);
+
+    document.removeEventListener('mouseup', upFct);
+    document.removeEventListener('mousemove', moveFct);
+  }
+
+  html.addEventListener('mousedown', function (evt) {
     console.log('mouseDown');
     startPos.x = evt.clientX;
     startPos.y = evt.clientY;
 
-    token.addEventListener('mousemove', moveFct);
+    document.addEventListener('mousemove', moveFct);
+    document.addEventListener('mouseup', upFct);
 
     evt.stopPropagation();
   })
 
-  token.addEventListener('mouseup', function (evt) {
-    console.log('mouseup');
-    token.removeEventListener('mousemove', moveFct);
-    evt.stopPropagation();
-
-    const offset = {
-      x: parseFloat(token.style.left),
-      y: parseFloat(token.style.top)
-    }
-
-    startTrajectory(offset);
-  })
 
   const startTrajectory = function (offset) {
 
-    console.log('startTrajectory', offset);
     let movementVector = {
       x: -offset.x,
       y: -offset.y
@@ -80,7 +121,6 @@ TokenShooter.prototype.createToken = function (_element) {
     let currentOffset = offset
 
     const animationFct = function () {
-      console.log('requestAnimationFrame', currentOffset);
       currentOffset = {
         x: currentOffset.x + (movementVector.x * TIMESCALE),
         y: currentOffset.y + movementVector.y * TIMESCALE
@@ -91,14 +131,18 @@ TokenShooter.prototype.createToken = function (_element) {
         y: movementVector.y + (GRAVITY * TIMESCALE)
       }
 
-      token.style.left = currentOffset.x + 'px';
-      token.style.top = currentOffset.y + 'px';
+      html.style.left = currentOffset.x + 'px';
+      html.style.top = currentOffset.y + 'px';
 
-      const hitElement = self.findHit(vectorAdd(startPos, currentOffset));
+      const tokenStart = {
+        x: _element.x + _element.width / 2,
+        y: _element.y + _element.height / 2
+      }
+
+      const hitElement = self.findHit(vectorAdd(tokenStart, currentOffset), token);
 
       if (hitElement) {
-        // handle hit
-        console.log(hitElement);
+        token.onHit(hitElement);
       } else {
         window.requestAnimationFrame(animationFct)
       }
@@ -108,31 +152,44 @@ TokenShooter.prototype.createToken = function (_element) {
   }
 
   return token;
-
 }
 
 
-TokenShooter.prototype.findHit = function (position) {
+TokenShooter.prototype.findHit = function (position, token) {
   const self = this;
   const bbox = {
-    x: position.x,
-    y: position.y,
-    width: 11,
-    height: 18
+    x: position.x - 5,
+    y: position.y - 5,
+    width: 10,
+    height: 10
   }
   const elements = this._elementRegistry.getAll();
   const hit = elements.find(function (element) {
     if (element.waypoints) return
     // console.log(element)
     // if(is)
+    if (element === token.bpmnElement) {
+      return false;
+    }
+
     return isOverlapping(bbox, element)
   });
+
 
   return hit;
 }
 
 function isOverlapping(a, b) {
+  console.log(a, b)
+
   return (a.x < b.x + b.width && a.x + a.width > b.x) && (a.y < b.y + b.height && a.y + a.height > b.y);
+}
+
+const vectorMult = function (a, factor) {
+  return {
+    x: a.x * factor,
+    y: a.y * factor
+  }
 }
 
 const vectorAdd = function (a, b) {
@@ -147,4 +204,16 @@ const vectorSub = function (a, b) {
     x: a.x - b.x,
     y: a.y - b.y
   }
+}
+
+cropVector = function (vector, maxLength) {
+  if (vectorLength(vector) > maxLength) {
+    const factor = maxLength / vectorLength(vector)
+    vector.x *= factor
+    vector.y *= factor
+  }
+}
+
+vectorLength = function (vector) {
+  return Math.sqrt(vector.x * vector.x + vector.y * vector.y)
 }
