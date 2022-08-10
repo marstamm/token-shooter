@@ -1,0 +1,19 @@
+{
+  "name": "token-shooting",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "@parcel/transformer-inline-string": "^2.7.0",
+    "parcel": "^2.7.0"
+  },
+  "dependencies": {
+    "bpmn-js": "^9.3.2"
+  }
+}
