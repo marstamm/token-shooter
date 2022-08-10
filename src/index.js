@@ -1,11 +1,14 @@
 import BpmnViewer from 'bpmn-js/lib/NavigatedViewer';
 import diagram from "./diagram.bpmn";
 
-console.log(diagram);
+import plugin from "../plugin"
 
 (async () => {
     var viewer = new BpmnViewer({
-        container: '#canvas'
+        container: '#canvas',
+        additionalModules: [
+            plugin
+        ]
     });
     
     await viewer.importXML(diagram);
