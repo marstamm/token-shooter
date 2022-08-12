@@ -19,5 +19,10 @@ import plugin from "../plugin"
     console.log('success!');
     viewer.get('canvas').zoom('fit-viewport');
 
-    viewer.get('tokenShooter').addToken('StartEvent_1');
+    viewer.get('tokenShooter').addToken('Activity_14ibh2e', '1');
+
+    viewer.get('eventBus').on('tokenShooter.canHit', (e) => {
+        console.log('tokenShooter.canHit', e.element);
+        return true;
+    })
 })()

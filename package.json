@@ -2,8 +2,11 @@
   "name": "token-shooting",
   "version": "1.0.0",
   "description": "",
-  "main": "index.js",
+  "source": "plugin/index.js",
+  "main": "dist/main.js",
+  "module": "dist/module.js",
   "scripts": {
+    "build": "parcel build",
     "start": "parcel src/index.html",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
